@@ -300,6 +300,31 @@ float AHRS::invSqrt(float x)
     return y;
 }
 
+void AHRS::getGyro(float* p, float* q, float* r)
+{
+    
+    float ax, ay, az;
+    float gx, gy, gz;
+
+    // Accel + gyro.
+    sensor->update();
+    sensor->read_accelerometer(&ax, &ay, &az);
+    sensor->read_gyroscope(&gx, &gy, &gz);
+
+    gx *= 180 / PI;
+    gy *= 180 / PI;
+    gz *= 180 / PI;
+
+    gx -= gyroOffset[0];
+    gy -= gyroOffset[1];
+    gz -= gyroOffset[2];
+
+
+    *p=gx;
+    *q=gy;
+    *r=gz;
+}
+
 float AHRS::getW()
 {
     return  q0;

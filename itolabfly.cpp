@@ -21,6 +21,9 @@
 #define BLMOTOR 1
 
 
+
+
+
 std::unique_ptr <RCInput> get_rcin()
 {
     auto ptr = std::unique_ptr <RCInput>{ new RCInput_Navio2() };
@@ -36,11 +39,12 @@ std::unique_ptr <RCOutput> get_rcout()
 
 //============================== Main loop ====================================
 
-void imuLoop(AHRS* ahrs, InertialSensor* imu)
+void imuLoop(AHRS* ahrs, RCInput* rcin, RCOutput* pwm)
 {
     // Orientation data
 
-    float roll, pitch, yaw;
+    float phi, theta, psi;
+    float p, q, r;
 
     struct timeval tv;
     float dt;
@@ -68,10 +72,20 @@ void imuLoop(AHRS* ahrs, InertialSensor* imu)
 
     ahrs->updateIMU(dt);
 
-
     //------------------------ Read Euler angles ------------------------------
 
-    ahrs->getEuler(&roll, &pitch, &yaw);
+    ahrs->getEuler(&theta, &phi, &psi);
+
+    ahrs->getGyro(&q, &p, &r);
+
+    //-------- Get RCInput 
+    int Rudder   = rcin->read(0);
+    int Elevator = rcin->read(1);
+    int Throttle = rcin->read(2);
+    int Aileron  = rcin->read(3);
+
+    float Roll, Pitch, Yaw, Thrust;
+
 
     //------------------- Discard the time of the first cycle -----------------
 
@@ -85,13 +99,57 @@ void imuLoop(AHRS* ahrs, InertialSensor* imu)
     //------------- Console and network output with a lowered rate ------------
 
     dtsumm += dt;
-    if(dtsumm > 0.05)
+    if(dtsumm > 0.005)
     {
         // Console output
-        printf("ROLL: %+05.2f PITCH: %+05.2f YAW: %+05.2f PERIOD %.4fs RATE %dHz \n", roll, pitch, yaw * -1, dt, int(1/dt));
+        printf("ROLL: %+7.2f PITCH: %+7.2f YAW: %+7.2f P: %+7.2f Q: %+7.2f R: %+7.2f AL: %04d  EL: %04d TH: %04d RD: %04d PERIOD %.4fs RATE %dHz \n", 
+        phi, theta, psi, p, q, r, Aileron, Elevator, Throttle, Rudder, dt, int(1/dt));
 
-        // Network output
-        //sock.output( ahrs->getW(), ahrs->getX(), ahrs->getY(), ahrs->getZ(), int(1/dt));
+        //Control
+        float ThrustCom = ((float)Throttle -1000.0)/1000.0;
+        float RollCom   = ((float)Aileron  -1500.0)/ 500.0;
+        float PitchCom  = ((float)Elevator -1500.0)/ 500.0; 
+        float YawCom    = ((float)Rudder   -1500.0)/ 500.0;
+
+        //float ThrustErr = ThrustCom;
+        float RollErr   = RollCom  - phi;
+        float PitchErr  = PitchCom - theta;
+        float YawErr    = YawCom   - psi;    
+
+        float pCom=RollErr  * 1.0;
+        float qCom=PitchErr * 1.0;
+        float rCom=YawErr   * 1.0;
+
+        float pErr = pCom - p;
+        float qErr = qCom - q;
+        float rErr = rCom - r;
+         
+        Thrust = ThrustCom;
+        Roll   = pErr * 1.0;
+        Pitch  = qErr * 1.0;
+        Yaw    = rErr * 1.0;
+
+        int FRmot=(int)(Thrust*800.0 - Roll*100.0 + Pitch*100.0 + Yaw*50.0) + 1000;
+        int FLmot=(int)(Thrust*800.0 + Roll*100.0 + Pitch*100.0 - Yaw*50.0) + 1000;
+        int BRmot=(int)(Thrust*800.0 - Roll*100.0 - Pitch*100.0 - Yaw*50.0) + 1000;
+        int BLmot=(int)(Thrust*800.0 + Roll*100.0 - Pitch*100.0 + Yaw*50.0) + 1000;
+
+        if (FRmot<1000) FRmot=1000;
+        else if (FRmot>2000) FRmot=2000;
+        if (FLmot<1000) FLmot=1000;
+        else if (FLmot>2000) FLmot=2000;
+        if (BRmot<1000) BRmot=1000;
+        else if (BRmot>2000) BRmot=2000;
+        if (BLmot<1000) BLmot=1000;
+        else if (BLmot>2000) BLmot=2000;
+
+
+
+        pwm->set_duty_cycle(FRMOTOR, FRmot);
+        pwm->set_duty_cycle(FLMOTOR, FLmot);
+        pwm->set_duty_cycle(BRMOTOR, BRmot);
+        pwm->set_duty_cycle(BLMOTOR, BLmot);
+
 
         dtsumm = 0;
     }
@@ -110,11 +168,12 @@ int main(int argc, char *argv[])
 
     auto imu = get_inertial_sensor(sensor_name);
 
+#if 0
     if (!imu) {
         printf("Wrong sensor name. Select: mpu or lsm\n");
         return EXIT_FAILURE;
     }
-
+#endif
     if (!imu->probe()) {
         printf("Sensor not enable\n");
         return EXIT_FAILURE;
@@ -166,12 +225,12 @@ int main(int argc, char *argv[])
 
     while (true)
     {
-        int FRmot = rcin->read(2);
-        if (FRmot == READ_FAILED) return EXIT_FAILURE;
-        printf("%d\n", FRmot);
-        pwm->set_duty_cycle(FRMOTOR, FRmot);
-        sleep(0.003);
-        imuLoop(ahrs,imu);
+        //int FRmot = rcin->read(2);
+        //if (FRmot == READ_FAILED) return EXIT_FAILURE;
+        //printf("%d\n", FRmot);
+        //pwm->set_duty_cycle(FRMOTOR, FRmot);
+        usleep(1900);
+        imuLoop(ahrs.get(), rcin.get(), pwm.get());
     }
     return 0;
 }
