@@ -35,7 +35,6 @@
 
 Led_Navio2 led;
 
-
 std::unique_ptr <RCInput> get_rcin()
 {
     auto ptr = std::unique_ptr <RCInput>{ new RCInput_Navio2() };
@@ -46,7 +45,6 @@ std::unique_ptr <RCOutput> get_rcout()
 {
         auto ptr = std::unique_ptr <RCOutput>{ new RCOutput_Navio2() };
         return ptr;
-
 }
 
 //============================== Main loop ====================================
