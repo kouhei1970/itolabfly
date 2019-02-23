@@ -24,6 +24,9 @@
 #define DISARMED 1
 #define ARMED 2
 
+#define RATE_CTL 0
+#define ANGLE_CTL 1
+
 #define AXIS_X 0
 #define AXIS_Y 1
 #define AXIS_Z 2
@@ -31,6 +34,29 @@
 #define KP 0
 #define KI 1
 #define KD 2
+
+
+float pid(float err, int id, int axis);
+
+float Olderr[2][3]={0.0};
+float Sum[2][3]={0.0};
+
+//Feedback gain
+float Pid_gain[2][3][3]={
+    {//rate contorl
+        //Kp, Ki, Kd
+        {0.01, 0.0, 0.0},//Roll
+        {0.01, 0.0, 0.0},//Pitch
+        {0.01, 0.0, 0.0} //Yaw
+    },
+    {//angle control
+        //Kp, Ki, Kd
+        {0.01, 0.0, 0.0},//Roll
+        {0.01, 0.0, 0.0},//Pitch
+        {0.01, 0.0, 0.0} //Yaw
+        
+    }
+};
 
 
 Led_Navio2 led;
@@ -43,8 +69,24 @@ std::unique_ptr <RCInput> get_rcin()
     
 std::unique_ptr <RCOutput> get_rcout()
 {
-        auto ptr = std::unique_ptr <RCOutput>{ new RCOutput_Navio2() };
-        return ptr;
+    auto ptr = std::unique_ptr <RCOutput>{ new RCOutput_Navio2() };
+    return ptr;
+}
+
+float pid(float err, int id, int axis){
+
+    float u,sum,derr;
+
+    derr = err-Olderr[id][axis];
+    Sum[id][axis] = Sum[id][axis]+err;
+    sum = Sum[id][axis];
+    Olderr[id][axis] = err;
+
+    u += Pid_gain[id][axis][KP] * err;  //P
+    u += Pid_gain[id][axis][KI] * sum;  //I
+    u += Pid_gain[id][axis][KD] * derr; //D  
+
+    return u ;
 }
 
 //============================== Main loop ====================================
@@ -55,18 +97,21 @@ void imuLoop(AHRS* ahrs, RCInput* rcin, RCOutput* pwm)
 
     float phi, theta, psi;
     float p, q, r;
-
     struct timeval tv;
     float dt;
+
     // Timing data
 
     static float maxdt;
     static float mindt = 0.01;
     static float dtsumm = 0;
+    static unsigned long previoustime, currenttime;
+
+    //State Valiable
+    
     static int isFirst = 1;
     static int count = 1500;
     static int mode=PREPARE; //mode: 0:not prepare 1:raedy disarmed 2:fligt armed 
-    static unsigned long previoustime, currenttime;
 
     //----------------------- Calculate delta time ----------------------------
     gettimeofday(&tv,NULL);
@@ -128,13 +173,13 @@ void imuLoop(AHRS* ahrs, RCInput* rcin, RCOutput* pwm)
                 p, q, r, 
                 Aileron, Elevator, Rudder, Throttle,
                 dt, int(1/dt)
-        );
+            );
     }
 
     //Control
     
-    float ThMin=1081.0;
-    float ThMax=1937.0;
+    float ThMin =1081.0;
+    float ThMax =1937.0;
     float AilMin=1079.0;
     float AilMax=1938.0;
     float EleMin=1096.0;
@@ -142,20 +187,6 @@ void imuLoop(AHRS* ahrs, RCInput* rcin, RCOutput* pwm)
     float RudMin=1056.0;
     float RudMax=1977.0;
     
-    //Rate feedback gain
-    float pid_r[][3]={
-        //Kp, Ki, Kd
-        {0.01, 0.0, 0.0},//Roll
-        {0.01, 0.0, 0.0},//Pitch
-        {0.01, 0.0, 0.0} //Yaw
-    };
-    //Angle feedback gain
-    float pid_a[][3]={
-        //Kp, Ki, Kd
-        {0.01, 0.0, 0.0},//Roll
-        {0.01, 0.0, 0.0},//Pitch
-        {0.01, 0.0, 0.0} //Yaw
-    };
 
     float ThrustCom = ((float)Throttle - ThMin)/(ThMax-ThMin);
     float RollCom   = ((float)Aileron  - ( AilMin + AilMax ) / 2 ) * 2 / ( AilMax - AilMin ) ;
@@ -182,19 +213,21 @@ void imuLoop(AHRS* ahrs, RCInput* rcin, RCOutput* pwm)
     float PitchErr  = PitchCom - theta;    
     float YawErr    = 0.0;//YawCom   - psi;
 
-    //Rate PID    
-    float pCom=RollErr  * 1.0;
-    float qCom=PitchErr * 1.0;
-    float rCom=YawErr   * 1.0;
-
+    //Rate Control PID (Outer Loop)
+    float pCom = pid(RollErr,  RATE_CTL, AXIS_X);
+    float qCom = pid(PitchErr, RATE_CTL, AXIS_Y);
+    float rCom = pid(YawErr,   RATE_CTL, AXIS_Z);
+        
     float pErr = pCom - p;
     float qErr = qCom - q;
     float rErr = rCom - r;
          
+    //Angle Control  PID (Inner Loop)
+    float Roll  = pid(pErr, ANGLE_CTL, AXIS_X);
+    float Pitch = pid(qErr, ANGLE_CTL, AXIS_Y);
+    float Yaw   = pid(rErr, ANGLE_CTL, AXIS_Z);
+
     Thrust = ThrustCom;
-    Roll   = pErr * 0.01;
-    Pitch  = qErr * 0.01;
-    Yaw    = rErr * 0.05;
 
     float mixing[]={800.0, 80.0, 80.0, 40.0 };
     int FRmot=(int)(Thrust*mixing[0] - Roll*mixing[1] + Pitch*mixing[2] + Yaw*mixing[3]) + 1000;
