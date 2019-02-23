@@ -46,8 +46,8 @@ float Sum[2][3]={0.0};
 float Pid_gain[2][3][3]={
     {//rate contorl
         //Kp, Ki, Kd
-        {0.01, 0.0, 0.0},//Roll
-        {0.01, 0.0, 0.0},//Pitch
+        {0.01, 0.0, 0.01},//Roll
+        {0.01, 0.0, 0.01},//Pitch
         {0.01, 0.0, 0.0} //Yaw
     },
     {//angle control
@@ -80,6 +80,8 @@ float pid(float err, int id, int axis){
 
     derr = err-Olderr[id][axis];
     Sum[id][axis] = Sum[id][axis]+err;
+    if (Sum[id][axis]>50000.0) Sum[id][axis]=50000.0;
+    else if (Sum[id][axis]<-50000.0) Sum[id][axis]=-50000.0;
     sum = Sum[id][axis];
     Olderr[id][axis] = err;
 
@@ -152,31 +154,6 @@ void imuLoop(AHRS* ahrs, RCInput* rcin, RCOutput* pwm)
     dtsumm += dt;
     if(dtsumm > 1.0/FREQ )
     {
-        // Console output
-        if(0){
-            printf(
-                "ROLL: %+7.2f PITCH: %+7.2f YAW: %+7.2f "
-                "P: %+7.2f Q: %+7.2f R: %+7.2f "
-                "AL: %04d  EL: %04d RD: %04d TH: %04d" 
-                "PERIOD %.4fs RATE %dHz \n", 
-                phi, theta, psi, 
-                p, q, r, 
-                Aileron, Elevator, Rudder, Throttle,
-                dt, int(1/dt)
-            );
-        }
-        else{
-            printf(
-                "%+7.2f, %+7.2f, %+7.2f, "
-                "%+7.2f, %+7.2f, %+7.2f, "
-                "%04d, %04d ,%04d ,%04d, " 
-                "%.4f, %d\n", 
-                phi, theta, psi, 
-                p, q, r, 
-                Aileron, Elevator, Rudder, Throttle,
-                dtsumm, int(1/dtsumm)
-            );
-        }
     
 
         //Control
@@ -222,7 +199,7 @@ void imuLoop(AHRS* ahrs, RCInput* rcin, RCOutput* pwm)
         
         float pErr = pCom - p;
         float qErr = qCom - q;
-        float rErr = rCom - r;
+        float rErr = YawCom - r;
          
         //Angle Control  PID (Inner Loop)
         float Roll  = pid(pErr, ANGLE_CTL, AXIS_X);
@@ -291,6 +268,33 @@ void imuLoop(AHRS* ahrs, RCInput* rcin, RCOutput* pwm)
                 mode = DISARMED;
         }
 
+        // Console output
+        if(0){
+            printf(
+                "ROLL: %+7.2f PITCH: %+7.2f YAW: %+7.2f "
+                "P: %+7.2f Q: %+7.2f R: %+7.2f "
+                "AL: %04d  EL: %04d RD: %04d TH: %04d" 
+                "PERIOD %.4fs RATE %dHz \n", 
+                phi, theta, psi, 
+                p, q, r, 
+                Aileron, Elevator, Rudder, Throttle,
+                dt, int(1/dt)
+            );
+        }
+        else{
+            printf(
+                "%+7.2f, %+7.2f, %+7.2f, "
+                "%+7.2f, %+7.2f, %+7.2f, "
+                "%04d, %04d ,%04d ,%04d, " 
+                "%04d, %04d ,%04d ,%04d, " 
+                "%.4f, %d\n", 
+                phi, theta, psi, 
+                p, q, r, 
+                Aileron, Elevator, Rudder, Throttle,
+                FRmot, FLmot, BRmot, BLmot,
+                dtsumm, int(1/dtsumm)
+            );
+        }
         //printf("FR %d, FL %d, BR %d, BL %d, Throttle %d\n",FRmot, FLmot, BRmot, BLmot, Throttle);
         //printf("TH %d, X %d, Y %d, Z %d\n",Throttle, Aileron, Elevator, Rudder);
         //printf("TH %d, X %f, Y %f, Z %f\n",Throttle, RollCom, PitchCom, YawCom);

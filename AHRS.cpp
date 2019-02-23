@@ -318,9 +318,9 @@ void AHRS::getGyro(float* p, float* q, float* r)
     gy *= 180 / PI;
     gz *= 180 / PI;
 
-    gx -= gyroOffset[0];
-    gy -= gyroOffset[1];
-    gz -= gyroOffset[2];
+    gx -= gyroOffset[0] * 180 /PI;
+    gy -= gyroOffset[1] * 180 /PI;
+    gz -= gyroOffset[2] * 180 /PI;
 
 
     *p=gx;
