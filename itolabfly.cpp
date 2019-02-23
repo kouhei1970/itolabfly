@@ -20,6 +20,10 @@
 #define BRMOTOR 3
 #define BLMOTOR 1
 
+#define PREPARE 0
+#define DISARMED 1
+#define ARMED 2
+
 
 Led_Navio2 led;
 
@@ -55,6 +59,9 @@ void imuLoop(AHRS* ahrs, RCInput* rcin, RCOutput* pwm)
     static float dtsumm = 0;
     static int isFirst = 1;
     static int count = 1500;
+    static int mode=PREPARE; //mode: 0:not prepare 1:raedy disarmed 2:fligt armed 
+
+
     static unsigned long previoustime, currenttime;
 
 
@@ -78,6 +85,7 @@ void imuLoop(AHRS* ahrs, RCInput* rcin, RCOutput* pwm)
     ahrs->getEuler(&theta, &phi, &psi);
 
     ahrs->getGyro(&q, &p, &r);
+    r=-r;
 
     //-------- Get RCInput 
     int Rudder   = rcin->read(0);
@@ -103,9 +111,30 @@ void imuLoop(AHRS* ahrs, RCInput* rcin, RCOutput* pwm)
     if(dtsumm > 0.005)
     {
         // Console output
-        //printf("ROLL: %+7.2f PITCH: %+7.2f YAW: %+7.2f\n", phi, theta, psi); 
-	//P: %+7.2f Q: %+7.2f R: %+7.2f AL: %04d  EL: %04d TH: %04d RD: %04d PERIOD %.4fs RATE %dHz \n", 
-        //phi, theta, psi, p, q, r, Aileron, Elevator, Throttle, Rudder, dt, int(1/dt));
+	if(0){
+        	printf(
+			"ROLL: %+7.2f PITCH: %+7.2f YAW: %+7.2f "
+			"P: %+7.2f Q: %+7.2f R: %+7.2f "
+			"AL: %04d  EL: %04d RD: %04d TH: %04d" 
+			"PERIOD %.4fs RATE %dHz \n", 
+			phi, theta, psi, 
+	       		p, q, r, 
+			Aileron, Elevator, Rudder, Throttle,
+	       		dt, int(1/dt)
+		);
+	}
+	else{
+        	printf(
+			"%+7.2f, %+7.2f, %+7.2f, "
+			"%+7.2f, %+7.2f, %+7.2f, "
+			"%04d, %04d ,%04d ,%04d, " 
+			"%.4f, %d\n", 
+			phi, theta, psi, 
+	       		p, q, r, 
+			Aileron, Elevator, Rudder, Throttle,
+	       		dt, int(1/dt)
+		);
+	}
 
         //Control
 	//
@@ -153,7 +182,7 @@ void imuLoop(AHRS* ahrs, RCInput* rcin, RCOutput* pwm)
         Thrust = ThrustCom;
         Roll   = pErr * 0.01;
         Pitch  = qErr * 0.01;
-        Yaw    = rErr * 0.01;
+        Yaw    = rErr * 0.05;
 
 	float mixing[]={800.0, 80.0, 80.0, 40.0 };
         int FRmot=(int)(Thrust*mixing[0] - Roll*mixing[1] + Pitch*mixing[2] + Yaw*mixing[3]) + 1000;
@@ -171,18 +200,57 @@ void imuLoop(AHRS* ahrs, RCInput* rcin, RCOutput* pwm)
         else if (BLmot>2000) BLmot=2000;
 
 
-        if (count==0){	
+        if ( mode==ARMED ){
+
+	    led.setColor(Colors::Red);  
             pwm->set_duty_cycle(FRMOTOR, FRmot);
             pwm->set_duty_cycle(FLMOTOR, FLmot);
             pwm->set_duty_cycle(BRMOTOR, BRmot);
             pwm->set_duty_cycle(BLMOTOR, BLmot);
+	
 	}
-	else count--;
+	if (mode==DISARMED){
+
+	    led.setColor(Colors::Blue);
+            pwm->set_duty_cycle(FRMOTOR, 1000);
+            pwm->set_duty_cycle(FLMOTOR, 1000);
+            pwm->set_duty_cycle(BRMOTOR, 1000);
+            pwm->set_duty_cycle(BLMOTOR, 1000);
+
+        }
+	if (mode==PREPARE){
+
+	    led.setColor(Colors::Yellow);  
+            pwm->set_duty_cycle(FRMOTOR, 1000);
+            pwm->set_duty_cycle(FLMOTOR, 1000);
+            pwm->set_duty_cycle(BRMOTOR, 1000);
+            pwm->set_duty_cycle(BLMOTOR, 1000);
+
+	}
+	
+        
+
+	
+	//Mode Change
+
+	if (count>0)count--;
+	
+	if (count>0){
+		mode = PREPARE;
+	}
+	else{
+		if (mode == PREPARE)
+	    		led.setColor(Colors::Blue);
+		if      ( Throttle < (int)(ThMin+20.0) && Rudder > (int)(RudMax-20.0) )
+			mode = ARMED;
+		else if ( Throttle < (int)(ThMin+20.0) && Rudder < (int)(RudMin+20.0) )
+			mode = DISARMED;
+	}	
 
 	//printf("FR %d, FL %d, BR %d, BL %d, Throttle %d\n",FRmot, FLmot, BRmot, BLmot, Throttle);
 	//printf("TH %d, X %d, Y %d, Z %d\n",Throttle, Aileron, Elevator, Rudder);
 	//printf("TH %d, X %f, Y %f, Z %f\n",Throttle, RollCom, PitchCom, YawCom);
-	printf("TH %d, X %f, Y %f, Z %f\n",Throttle, RollErr, PitchErr, YawErr);
+	//printf("TH %d, X %f, Y %f, Z %f\n",Throttle, RollErr, PitchErr, YawErr);
 	//printf("TH %d, X %f, Y %f, Z %f\n",Throttle, phi, theta, psi);
 
 
@@ -258,7 +326,7 @@ int main(int argc, char *argv[])
     }
 
     if (rcin->read(2)>1900){
-
+        led.setColor(Colors::Yellow);
 	printf("Start Motor Calibration\n");
 
 	while( rcin->read(2) > 1100 ){
@@ -280,8 +348,9 @@ int main(int argc, char *argv[])
 
     }
 
+    led.setColor(Colors::Blue);
+
     printf("Let's go Fly ! \n");
-    led.setColor(Colors::Red);  
 
     //pwm->set_duty_cycle(FRMOTOR, 1000);
     //pwm->set_duty_cycle(FLMOTOR, 1000);
