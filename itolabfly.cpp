@@ -145,19 +145,19 @@ void imuLoop(AHRS* ahrs, RCInput* rcin, RCOutput* pwm)
     float RudMax=1977.0;
     
     //Rate feedback gain
-    float pid_r[][]={
+    float pid_r[][3]={
         //Kp, Ki, Kd
         {0.01, 0.0, 0.0},//Roll
         {0.01, 0.0, 0.0},//Pitch
         {0.01, 0.0, 0.0} //Yaw
-    }
+    };
     //Angle feedback gain
-    float pid_a[][]={
+    float pid_a[][3]={
         //Kp, Ki, Kd
         {0.01, 0.0, 0.0},//Roll
         {0.01, 0.0, 0.0},//Pitch
         {0.01, 0.0, 0.0} //Yaw
-    }
+    };
 
     float ThrustCom = ((float)Throttle - ThMin)/(ThMax-ThMin);
     float RollCom   = ((float)Aileron  - ( AilMin + AilMax ) / 2 ) * 2 / ( AilMax - AilMin ) ;
