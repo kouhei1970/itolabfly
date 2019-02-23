@@ -1,5 +1,3 @@
-//hogehoge
-
 #include <unistd.h>
 #include <cstdio>
 #include <sys/time.h>
@@ -37,6 +35,7 @@
 #define KI 1
 #define KD 2
 
+#define FREQ 200.0
 
 float pid(float err, int id, int axis);
 
@@ -97,6 +96,7 @@ void imuLoop(AHRS* ahrs, RCInput* rcin, RCOutput* pwm)
 {
     // Orientation data
 
+    
     float phi, theta, psi;
     float p, q, r;
     struct timeval tv;
@@ -113,19 +113,19 @@ void imuLoop(AHRS* ahrs, RCInput* rcin, RCOutput* pwm)
     
     static int isFirst = 1;
     static int count = 1500;
-    static int mode=PREPARE; //mode: 0:not prepare 1:raedy disarmed 2:fligt armed 
+    static int mode=PREPARE; //mode: 0:PREPARE 1:Disarmed 2:Armed 
 
     //----------------------- Calculate delta time ----------------------------
     gettimeofday(&tv,NULL);
     previoustime = currenttime;
     currenttime = 1000000 * tv.tv_sec + tv.tv_usec;
     dt = (currenttime - previoustime) / 1000000.0;
-    if(dt < 1/1300.0) usleep((1/1300.0-dt)*1000000);
+    if ( dt < 0.001 )  usleep((0.001-dt)*1000000);
     gettimeofday(&tv,NULL);
     currenttime = 1000000 * tv.tv_sec + tv.tv_usec;
     dt = (currenttime - previoustime) / 1000000.0;
 
-    //-------- Read raw measurements from the MPU and update AHRS --------------
+    //-------- Read raw measurements from the MPU and update AHRS -------------
     ahrs->updateIMU(dt);
 
     //------------------------ Read Euler angles ------------------------------
@@ -150,7 +150,7 @@ void imuLoop(AHRS* ahrs, RCInput* rcin, RCOutput* pwm)
 
     //------------- Console and network output with a lowered rate ------------
     dtsumm += dt;
-    if(dtsumm > 0.005)
+    if(dtsumm > 1.0/FREQ )
     {
         // Console output
         if(0){
@@ -174,68 +174,68 @@ void imuLoop(AHRS* ahrs, RCInput* rcin, RCOutput* pwm)
                 phi, theta, psi, 
                 p, q, r, 
                 Aileron, Elevator, Rudder, Throttle,
-                dt, int(1/dt)
+                dtsumm, int(1/dtsumm)
             );
-    }
-
-    //Control
-    
-    float ThMin =1081.0;
-    float ThMax =1937.0;
-    float AilMin=1079.0;
-    float AilMax=1938.0;
-    float EleMin=1096.0;
-    float EleMax=1962.0;
-    float RudMin=1056.0;
-    float RudMax=1977.0;
+        }
     
 
-    float ThrustCom = ((float)Throttle - ThMin)/(ThMax-ThMin);
-    float RollCom   = ((float)Aileron  - ( AilMin + AilMax ) / 2 ) * 2 / ( AilMax - AilMin ) ;
-    float PitchCom  = ((float)Elevator - ( EleMin + EleMax ) / 2 ) * 2 / ( EleMax - EleMin ) ; 
-    float YawCom    = ((float)Rudder   - ( RudMin + RudMax ) / 2 ) * 2 / ( RudMax - RudMin ) ;
+        //Control
+    
+        float ThMin =1081.0;
+        float ThMax =1937.0;
+        float AilMin=1079.0;
+        float AilMax=1938.0;
+        float EleMin=1096.0;
+        float EleMax=1962.0;
+        float RudMin=1056.0;
+        float RudMax=1977.0;
 
-    if (ThrustCom<0.0) ThrustCom=0.0;
-    else if (ThrustCom>1.0) ThrustCom=1.0;
+        float ThrustCom = ((float)Throttle - ThMin)/(ThMax-ThMin);
+        float RollCom   = ((float)Aileron  - ( AilMin + AilMax ) / 2 ) * 2 / ( AilMax - AilMin ) ;
+        float PitchCom  = ((float)Elevator - ( EleMin + EleMax ) / 2 ) * 2 / ( EleMax - EleMin ) ; 
+        float YawCom    = ((float)Rudder   - ( RudMin + RudMax ) / 2 ) * 2 / ( RudMax - RudMin ) ;
 
-    if (RollCom<-1.0) RollCom=-1.0;
-    else if (RollCom>1.0) ThrustCom=1.0;
+        if (ThrustCom<0.0) ThrustCom=0.0;
+        else if (ThrustCom>1.0) ThrustCom=1.0;
 
-    if (PitchCom<-1.0) PitchCom=-1.0;
-    else if (PitchCom>1.0) PitchCom=1.0;
+        if (RollCom<-1.0) RollCom=-1.0;
+        else if (RollCom>1.0) ThrustCom=1.0;
 
-    if (YawCom<-1.0) YawCom=-1.0;
-    else if (YawCom>1.0) YawCom=1.0;
+        if (PitchCom<-1.0) PitchCom=-1.0;
+        else if (PitchCom>1.0) PitchCom=1.0;
 
-    RollCom = RollCom * 45.0;
-    PitchCom = PitchCom * 45.0;
+       if (YawCom<-1.0) YawCom=-1.0;
+        else if (YawCom>1.0) YawCom=1.0;
 
-    //float ThrustErr = ThrustCom;
-    float RollErr   = RollCom  - phi;
-    float PitchErr  = PitchCom - theta;    
-    float YawErr    = 0.0;//YawCom   - psi;
+        RollCom = RollCom * 45.0;
+        PitchCom = PitchCom * 45.0;
 
-    //Rate Control PID (Outer Loop)
-    float pCom = pid(RollErr,  RATE_CTL, AXIS_X);
-    float qCom = pid(PitchErr, RATE_CTL, AXIS_Y);
-    float rCom = pid(YawErr,   RATE_CTL, AXIS_Z);
+        //float ThrustErr = ThrustCom;
+        float RollErr   = RollCom  - phi;
+        float PitchErr  = PitchCom - theta;    
+        float YawErr    = 0.0;//YawCom   - psi;
+
+        //Rate Control PID (Outer Loop)
+        float pCom = pid(RollErr,  RATE_CTL, AXIS_X);
+        float qCom = pid(PitchErr, RATE_CTL, AXIS_Y);
+        float rCom = pid(YawErr,   RATE_CTL, AXIS_Z);
         
-    float pErr = pCom - p;
-    float qErr = qCom - q;
-    float rErr = rCom - r;
+        float pErr = pCom - p;
+        float qErr = qCom - q;
+        float rErr = rCom - r;
          
-    //Angle Control  PID (Inner Loop)
-    float Roll  = pid(pErr, ANGLE_CTL, AXIS_X);
-    float Pitch = pid(qErr, ANGLE_CTL, AXIS_Y);
-    float Yaw   = pid(rErr, ANGLE_CTL, AXIS_Z);
+        //Angle Control  PID (Inner Loop)
+        float Roll  = pid(pErr, ANGLE_CTL, AXIS_X);
+        float Pitch = pid(qErr, ANGLE_CTL, AXIS_Y);
+        float Yaw   = pid(rErr, ANGLE_CTL, AXIS_Z);
 
-    Thrust = ThrustCom;
+        Thrust = ThrustCom;
 
-    float mixing[]={800.0, 80.0, 80.0, 40.0 };
-    int FRmot=(int)(Thrust*mixing[0] - Roll*mixing[1] + Pitch*mixing[2] + Yaw*mixing[3]) + 1000;
-    int FLmot=(int)(Thrust*mixing[0] + Roll*mixing[1] + Pitch*mixing[2] - Yaw*mixing[3]) + 1000;
-    int BRmot=(int)(Thrust*mixing[0] - Roll*mixing[1] - Pitch*mixing[2] - Yaw*mixing[3]) + 1000;
-    int BLmot=(int)(Thrust*mixing[0] + Roll*mixing[1] - Pitch*mixing[2] + Yaw*mixing[3]) + 1000;
+        float mixing[]={800.0, 80.0, 80.0, 40.0 };
+        int FRmot=(int)(Thrust*mixing[0] - Roll*mixing[1] + Pitch*mixing[2] + Yaw*mixing[3]) + 1000;
+        int FLmot=(int)(Thrust*mixing[0] + Roll*mixing[1] + Pitch*mixing[2] - Yaw*mixing[3]) + 1000;
+        int BRmot=(int)(Thrust*mixing[0] - Roll*mixing[1] - Pitch*mixing[2] - Yaw*mixing[3]) + 1000;
+        int BLmot=(int)(Thrust*mixing[0] + Roll*mixing[1] - Pitch*mixing[2] + Yaw*mixing[3]) + 1000;
 
         if (FRmot<1000) FRmot=1000;
         else if (FRmot>2000) FRmot=2000;
@@ -246,63 +246,60 @@ void imuLoop(AHRS* ahrs, RCInput* rcin, RCOutput* pwm)
         if (BLmot<1000) BLmot=1000;
         else if (BLmot>2000) BLmot=2000;
 
-
+#if 1
         if ( mode==ARMED ){
 
-	    led.setColor(Colors::Red);  
+            led.setColor(Colors::Red);  
             pwm->set_duty_cycle(FRMOTOR, FRmot);
             pwm->set_duty_cycle(FLMOTOR, FLmot);
             pwm->set_duty_cycle(BRMOTOR, BRmot);
             pwm->set_duty_cycle(BLMOTOR, BLmot);
-	
-	}
-	if (mode==DISARMED){
-
-	    led.setColor(Colors::Blue);
-            pwm->set_duty_cycle(FRMOTOR, 1000);
-            pwm->set_duty_cycle(FLMOTOR, 1000);
-            pwm->set_duty_cycle(BRMOTOR, 1000);
-            pwm->set_duty_cycle(BLMOTOR, 1000);
 
         }
-	if (mode==PREPARE){
+        if (mode==DISARMED){
 
-	    led.setColor(Colors::Yellow);  
+            led.setColor(Colors::Blue);
             pwm->set_duty_cycle(FRMOTOR, 1000);
             pwm->set_duty_cycle(FLMOTOR, 1000);
             pwm->set_duty_cycle(BRMOTOR, 1000);
             pwm->set_duty_cycle(BLMOTOR, 1000);
-
-	}
-	
+        }
         
+        if (mode==PREPARE){
 
-	
-	//Mode Change
+            led.setColor(Colors::Yellow);  
+            pwm->set_duty_cycle(FRMOTOR, 1000);
+            pwm->set_duty_cycle(FLMOTOR, 1000);
+            pwm->set_duty_cycle(BRMOTOR, 1000);
+            pwm->set_duty_cycle(BLMOTOR, 1000);
+        }
+#endif        
+        //Mode Change
 
-	if (count>0)count--;
-	
-	if (count>0){
-		mode = PREPARE;
-	}
-	else{
-		if (mode == PREPARE)
-	    		led.setColor(Colors::Blue);
-		if      ( Throttle < (int)(ThMin+20.0) && Rudder > (int)(RudMax-20.0) )
-			mode = ARMED;
-		else if ( Throttle < (int)(ThMin+20.0) && Rudder < (int)(RudMin+20.0) )
-			mode = DISARMED;
-	}	
+        if (count>0)count--;
+    
+        if (count>0){
+            mode = PREPARE;
+        }
+        else{
 
-	//printf("FR %d, FL %d, BR %d, BL %d, Throttle %d\n",FRmot, FLmot, BRmot, BLmot, Throttle);
-	//printf("TH %d, X %d, Y %d, Z %d\n",Throttle, Aileron, Elevator, Rudder);
-	//printf("TH %d, X %f, Y %f, Z %f\n",Throttle, RollCom, PitchCom, YawCom);
-	//printf("TH %d, X %f, Y %f, Z %f\n",Throttle, RollErr, PitchErr, YawErr);
-	//printf("TH %d, X %f, Y %f, Z %f\n",Throttle, phi, theta, psi);
+            if (mode == PREPARE)
+                led.setColor(Colors::Blue);
+            if ( Throttle < (int)(ThMin+20.0) && Rudder > (int)(RudMax-20.0) )
+                mode = ARMED;
+            else if ( Throttle < (int)(ThMin+20.0) && Rudder < (int)(RudMin+20.0) )
+                mode = DISARMED;
+        }
 
+        //printf("FR %d, FL %d, BR %d, BL %d, Throttle %d\n",FRmot, FLmot, BRmot, BLmot, Throttle);
+        //printf("TH %d, X %d, Y %d, Z %d\n",Throttle, Aileron, Elevator, Rudder);
+        //printf("TH %d, X %f, Y %f, Z %f\n",Throttle, RollCom, PitchCom, YawCom);
+        //printf("TH %d, X %f, Y %f, Z %f\n",Throttle, RollErr, PitchErr, YawErr);
+        //printf("TH %d, X %f, Y %f, Z %f\n",Throttle, phi, theta, psi);
 
         dtsumm = 0;
     }
+
 }
 
 
@@ -354,10 +351,10 @@ int main(int argc, char *argv[])
     pwm->initialize(BRMOTOR);
     pwm->initialize(BLMOTOR);
 
-    pwm->set_frequency(FRMOTOR, 300);
-    pwm->set_frequency(FLMOTOR, 300);
-    pwm->set_frequency(BRMOTOR, 300);
-    pwm->set_frequency(BLMOTOR, 300);
+    pwm->set_frequency(FRMOTOR, (int)FREQ );
+    pwm->set_frequency(FLMOTOR, (int)FREQ );
+    pwm->set_frequency(BRMOTOR, (int)FREQ );
+    pwm->set_frequency(BLMOTOR, (int)FREQ );
 
     if ( !(pwm->enable(FRMOTOR)) ) {
         return 1;
@@ -391,7 +388,7 @@ int main(int argc, char *argv[])
         pwm->set_duty_cycle(FLMOTOR, 1000);
         pwm->set_duty_cycle(BRMOTOR, 1000);
         pwm->set_duty_cycle(BLMOTOR, 1000);
-	usleep(1000);
+        usleep(1000);
 
     }
 
@@ -410,7 +407,7 @@ int main(int argc, char *argv[])
         //if (FRmot == READ_FAILED) return EXIT_FAILURE;
         //printf("%d\n", FRmot);
         //pwm->set_duty_cycle(FRMOTOR, FRmot);
-        usleep(1900);
+        //usleep(1900);
         imuLoop(ahrs.get(), rcin.get(), pwm.get());
     }
     return 0;
