@@ -24,6 +24,14 @@
 #define DISARMED 1
 #define ARMED 2
 
+#define AXIS_X 0
+#define AXIS_Y 1
+#define AXIS_Z 2
+
+#define KP 0
+#define KI 1
+#define KD 2
+
 
 Led_Navio2 led;
 
@@ -60,13 +68,9 @@ void imuLoop(AHRS* ahrs, RCInput* rcin, RCOutput* pwm)
     static int isFirst = 1;
     static int count = 1500;
     static int mode=PREPARE; //mode: 0:not prepare 1:raedy disarmed 2:fligt armed 
-
-
     static unsigned long previoustime, currenttime;
 
-
     //----------------------- Calculate delta time ----------------------------
-
     gettimeofday(&tv,NULL);
     previoustime = currenttime;
     currenttime = 1000000 * tv.tv_sec + tv.tv_usec;
@@ -77,13 +81,10 @@ void imuLoop(AHRS* ahrs, RCInput* rcin, RCOutput* pwm)
     dt = (currenttime - previoustime) / 1000000.0;
 
     //-------- Read raw measurements from the MPU and update AHRS --------------
-
     ahrs->updateIMU(dt);
 
     //------------------------ Read Euler angles ------------------------------
-
     ahrs->getEuler(&theta, &phi, &psi);
-
     ahrs->getGyro(&q, &p, &r);
     r=-r;
 
@@ -92,103 +93,116 @@ void imuLoop(AHRS* ahrs, RCInput* rcin, RCOutput* pwm)
     int Elevator = rcin->read(1);
     int Throttle = rcin->read(2);
     int Aileron  = rcin->read(3);
-
     float Roll, Pitch, Yaw, Thrust;
 
-
     //------------------- Discard the time of the first cycle -----------------
-
     if (!isFirst)
     {
-    	if (dt > maxdt) maxdt = dt;
-    	if (dt < mindt) mindt = dt;
+      if (dt > maxdt) maxdt = dt;
+      if (dt < mindt) mindt = dt;
     }
     isFirst = 0;
 
     //------------- Console and network output with a lowered rate ------------
-
     dtsumm += dt;
     if(dtsumm > 0.005)
     {
         // Console output
-	if(0){
-        	printf(
-			"ROLL: %+7.2f PITCH: %+7.2f YAW: %+7.2f "
-			"P: %+7.2f Q: %+7.2f R: %+7.2f "
-			"AL: %04d  EL: %04d RD: %04d TH: %04d" 
-			"PERIOD %.4fs RATE %dHz \n", 
-			phi, theta, psi, 
-	       		p, q, r, 
-			Aileron, Elevator, Rudder, Throttle,
-	       		dt, int(1/dt)
-		);
-	}
-	else{
-        	printf(
-			"%+7.2f, %+7.2f, %+7.2f, "
-			"%+7.2f, %+7.2f, %+7.2f, "
-			"%04d, %04d ,%04d ,%04d, " 
-			"%.4f, %d\n", 
-			phi, theta, psi, 
-	       		p, q, r, 
-			Aileron, Elevator, Rudder, Throttle,
-	       		dt, int(1/dt)
-		);
-	}
+        if(0){
+            printf(
+                "ROLL: %+7.2f PITCH: %+7.2f YAW: %+7.2f "
+                "P: %+7.2f Q: %+7.2f R: %+7.2f "
+                "AL: %04d  EL: %04d RD: %04d TH: %04d" 
+                "PERIOD %.4fs RATE %dHz \n", 
+                phi, theta, psi, 
+                p, q, r, 
+                Aileron, Elevator, Rudder, Throttle,
+                dt, int(1/dt)
+            );
+        }
+        else{
+            printf(
+                "%+7.2f, %+7.2f, %+7.2f, "
+                "%+7.2f, %+7.2f, %+7.2f, "
+                "%04d, %04d ,%04d ,%04d, " 
+                "%.4f, %d\n", 
+                phi, theta, psi, 
+                p, q, r, 
+                Aileron, Elevator, Rudder, Throttle,
+                dt, int(1/dt)
+        );
+    }
 
-        //Control
-	//
-	float ThMin=1081.0;
-	float ThMax=1937.0;
-        float AilMin=1079.0;
-	float AilMax=1938.0;
-	float EleMin=1096.0;
-	float EleMax=1962.0;
-	float RudMin=1056.0;
-	float RudMax=1977.0;
-	
-        float ThrustCom = ((float)Throttle - ThMin)/(ThMax-ThMin);
-        float RollCom   = ((float)Aileron  - ( AilMin + AilMax ) / 2 ) * 2 / ( AilMax - AilMin ) ;
-        float PitchCom  = ((float)Elevator - ( EleMin + EleMax ) / 2 ) * 2 / ( EleMax - EleMin ) ; 
-        float YawCom    = ((float)Rudder   - ( RudMin + RudMax ) / 2 ) * 2 / ( RudMax - RudMin ) ;
-	if (ThrustCom<0.0) ThrustCom=0.0;
-	else if (ThrustCom>1.0) ThrustCom=1.0;
+    //Control
+    
+    float ThMin=1081.0;
+    float ThMax=1937.0;
+    float AilMin=1079.0;
+    float AilMax=1938.0;
+    float EleMin=1096.0;
+    float EleMax=1962.0;
+    float RudMin=1056.0;
+    float RudMax=1977.0;
+    
+    //Rate feedback gain
+    float pid_r[][]={
+        //Kp, Ki, Kd
+        {0.01, 0.0, 0.0},//Roll
+        {0.01, 0.0, 0.0},//Pitch
+        {0.01, 0.0, 0.0} //Yaw
+    }
+    //Angle feedback gain
+    float pid_a[][]={
+        //Kp, Ki, Kd
+        {0.01, 0.0, 0.0},//Roll
+        {0.01, 0.0, 0.0},//Pitch
+        {0.01, 0.0, 0.0} //Yaw
+    }
 
-	if (RollCom<-1.0) RollCom=-1.0;
-	else if (RollCom>1.0) ThrustCom=1.0;
+    float ThrustCom = ((float)Throttle - ThMin)/(ThMax-ThMin);
+    float RollCom   = ((float)Aileron  - ( AilMin + AilMax ) / 2 ) * 2 / ( AilMax - AilMin ) ;
+    float PitchCom  = ((float)Elevator - ( EleMin + EleMax ) / 2 ) * 2 / ( EleMax - EleMin ) ; 
+    float YawCom    = ((float)Rudder   - ( RudMin + RudMax ) / 2 ) * 2 / ( RudMax - RudMin ) ;
 
-	if (PitchCom<-1.0) PitchCom=-1.0;
-	else if (PitchCom>1.0) PitchCom=1.0;
+    if (ThrustCom<0.0) ThrustCom=0.0;
+    else if (ThrustCom>1.0) ThrustCom=1.0;
 
-	if (YawCom<-1.0) YawCom=-1.0;
-	else if (YawCom>1.0) YawCom=1.0;
+    if (RollCom<-1.0) RollCom=-1.0;
+    else if (RollCom>1.0) ThrustCom=1.0;
 
-	RollCom = RollCom * 45.0;
-	PitchCom = PitchCom * 45.0;
+    if (PitchCom<-1.0) PitchCom=-1.0;
+    else if (PitchCom>1.0) PitchCom=1.0;
 
-	//float ThrustErr = ThrustCom;
-        float RollErr   = RollCom  - phi;
-        float PitchErr  = PitchCom - theta;
-        float YawErr    = 0.0;//YawCom   - psi;    
+    if (YawCom<-1.0) YawCom=-1.0;
+    else if (YawCom>1.0) YawCom=1.0;
 
-        float pCom=RollErr  * 1.0;
-        float qCom=PitchErr * 1.0;
-        float rCom=YawErr   * 1.0;
+    RollCom = RollCom * 45.0;
+    PitchCom = PitchCom * 45.0;
 
-        float pErr = pCom - p;
-        float qErr = qCom - q;
-        float rErr = rCom - r;
+    //float ThrustErr = ThrustCom;
+    float RollErr   = RollCom  - phi;
+    float PitchErr  = PitchCom - theta;    
+    float YawErr    = 0.0;//YawCom   - psi;
+
+    //Rate PID    
+    float pCom=RollErr  * 1.0;
+    float qCom=PitchErr * 1.0;
+    float rCom=YawErr   * 1.0;
+
+    float pErr = pCom - p;
+    float qErr = qCom - q;
+    float rErr = rCom - r;
          
-        Thrust = ThrustCom;
-        Roll   = pErr * 0.01;
-        Pitch  = qErr * 0.01;
-        Yaw    = rErr * 0.05;
+    Thrust = ThrustCom;
+    Roll   = pErr * 0.01;
+    Pitch  = qErr * 0.01;
+    Yaw    = rErr * 0.05;
 
-	float mixing[]={800.0, 80.0, 80.0, 40.0 };
-        int FRmot=(int)(Thrust*mixing[0] - Roll*mixing[1] + Pitch*mixing[2] + Yaw*mixing[3]) + 1000;
-        int FLmot=(int)(Thrust*mixing[0] + Roll*mixing[1] + Pitch*mixing[2] - Yaw*mixing[3]) + 1000;
-        int BRmot=(int)(Thrust*mixing[0] - Roll*mixing[1] - Pitch*mixing[2] - Yaw*mixing[3]) + 1000;
-        int BLmot=(int)(Thrust*mixing[0] + Roll*mixing[1] - Pitch*mixing[2] + Yaw*mixing[3]) + 1000;
+    float mixing[]={800.0, 80.0, 80.0, 40.0 };
+    int FRmot=(int)(Thrust*mixing[0] - Roll*mixing[1] + Pitch*mixing[2] + Yaw*mixing[3]) + 1000;
+    int FLmot=(int)(Thrust*mixing[0] + Roll*mixing[1] + Pitch*mixing[2] - Yaw*mixing[3]) + 1000;
+    int BRmot=(int)(Thrust*mixing[0] - Roll*mixing[1] - Pitch*mixing[2] - Yaw*mixing[3]) + 1000;
+    int BLmot=(int)(Thrust*mixing[0] + Roll*mixing[1] - Pitch*mixing[2] + Yaw*mixing[3]) + 1000;
 
         if (FRmot<1000) FRmot=1000;
         else if (FRmot>2000) FRmot=2000;
