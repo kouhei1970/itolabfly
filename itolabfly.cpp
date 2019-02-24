@@ -151,10 +151,10 @@ void imuLoop(AHRS* ahrs, RCInput* rcin, RCOutput* pwm)
     previoustime = currenttime;
     currenttime = 1000000 * tv.tv_sec + tv.tv_usec;
     dt = (currenttime - previoustime) / 1000000.0;
-    if ( dt < 0.001 )  usleep((0.001-dt)*1000000);
-    gettimeofday(&tv,NULL);
-    currenttime = 1000000 * tv.tv_sec + tv.tv_usec;
-    dt = (currenttime - previoustime) / 1000000.0;
+    //if ( dt < 0.001 )  usleep((0.001-dt)*1000000);
+    //gettimeofday(&tv,NULL);
+    //currenttime = 1000000 * tv.tv_sec + tv.tv_usec;
+    //dt = (currenttime - previoustime) / 1000000.0;
 
     //-------- Read raw measurements from the MPU and update AHRS -------------
     ahrs->updateIMU(dt);
