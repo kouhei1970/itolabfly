@@ -13,6 +13,8 @@
 #include <Common/Util.h>
 #include "AHRS.hpp"
 #include <Navio2/Led_Navio2.h>
+#include <sys/resource.h>
+
 
 #define READ_FAILED -1
 #define FRMOTOR 0
@@ -198,8 +200,8 @@ void imuLoop(AHRS* ahrs, RCInput* rcin, RCOutput* pwm)
     }
 
     //------------- Console and network output with a lowered rate ------------
-    dtsumm += dt;
-    if(dtsumm > 1.0/FREQ )
+    dtsumm = dt;
+    if(1)//dtsumm > 1.0/FREQ )
     {
     
 
@@ -450,9 +452,12 @@ int main(int argc, char *argv[])
     printf("Let's go Fly ! \n");
 
     //Main Loop
+    setpriority(PRIO_PROCESS,0,-20);
+
     while (true)
     {
         imuLoop(ahrs.get(), rcin.get(), pwm.get());
+        usleep((int)((1.0/FREQ-0.0012)*1000000));
     }
     return 0;
 }
