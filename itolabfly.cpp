@@ -162,11 +162,16 @@ void imuLoop(AHRS* ahrs, RCInput* rcin, RCOutput* pwm)
     ahrs->getGyro(&q, &p, &r);
     r=-r;
 
-    //-------- Get RCInput 
-    int Rudder   = rcin->read(0);
-    int Elevator = rcin->read(1);
-    int Throttle = rcin->read(2);
-    int Aileron  = rcin->read(3);
+    //-------- Get RCInput
+     
+    int Rudder   = 0;
+    int Elevator = 0;
+    int Throttle = 0;
+    int Aileron  = 0;
+    Rudder   = rcin->read(0);
+    Elevator = rcin->read(1);
+    Throttle = rcin->read(2);
+    Aileron  = rcin->read(3);
     float Roll, Pitch, Yaw, Thrust;
 
     //------------------- Discard the time of the first cycle -----------------
@@ -429,43 +434,24 @@ int main(int argc, char *argv[])
 
     if (rcin->read(2)>1900){
         led.setColor(Colors::Yellow);
-	printf("Start Motor Calibration\n");
-
-	while( rcin->read(2) > 1100 ){
-            pwm->set_duty_cycle(FRMOTOR, 2000);
-            pwm->set_duty_cycle(FLMOTOR, 2000);
-            pwm->set_duty_cycle(BRMOTOR, 2000);
-            pwm->set_duty_cycle(BLMOTOR, 2000);
-	}
-	//while( rcin->read(2) > 1100 );
+        printf("Start Motor Calibration\n");
+        while( rcin->read(2) > 1100 ){
+            motor_control(pwm.get() ,2000, 2000, 2000, 2000);
+        }
 
     }
 
     for (int i=0;i<8000;i++){
-        pwm->set_duty_cycle(FRMOTOR, 1000);
-        pwm->set_duty_cycle(FLMOTOR, 1000);
-        pwm->set_duty_cycle(BRMOTOR, 1000);
-        pwm->set_duty_cycle(BLMOTOR, 1000);
+        motor_control(pwm.get(), MOTSTOP, MOTSTOP, MOTSTOP, MOTSTOP);
         usleep(1000);
-
     }
 
     led.setColor(Colors::Blue);
-
     printf("Let's go Fly ! \n");
 
-    //pwm->set_duty_cycle(FRMOTOR, 1000);
-    //pwm->set_duty_cycle(FLMOTOR, 1000);
-    //pwm->set_duty_cycle(BRMOTOR, 1000);
-    //pwm->set_duty_cycle(BLMOTOR, 1000);
-
+    //Main Loop
     while (true)
     {
-        //int FRmot = rcin->read(2);
-        //if (FRmot == READ_FAILED) return EXIT_FAILURE;
-        //printf("%d\n", FRmot);
-        //pwm->set_duty_cycle(FRMOTOR, FRmot);
-        //usleep(1900);
         imuLoop(ahrs.get(), rcin.get(), pwm.get());
     }
     return 0;
