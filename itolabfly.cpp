@@ -118,9 +118,9 @@ float Olddata[3]={0.0};
 float filter(int axis, float dt, float data){
     float y,T,f;
     f=5.0;//[Hz]
-    T=1/f/2/3.14159;
+    T=1.0/f/2/3.14159;
     y=(T * Olddata[axis] + dt * data)/(T + dt);
-    Olddata[axis]=data;
+    Olddata[axis]=y;
     return y;
 }
 void motor_control(RCOutput* pwm, int rr, int rl, int br, int bl){
