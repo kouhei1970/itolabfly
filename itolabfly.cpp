@@ -128,8 +128,9 @@ void imuLoop(AHRS* ahrs, RCInput* rcin, RCOutput* pwm)
 
     static float maxdt;
     static float mindt = 0.01;
-    static float dtsumm = 0;
+    static float dtsumm = 0.0;
     static unsigned long previoustime, currenttime;
+    static float total_time=0.0;
 
     //State Valiable
     
@@ -168,7 +169,22 @@ void imuLoop(AHRS* ahrs, RCInput* rcin, RCOutput* pwm)
       if (dt > maxdt) maxdt = dt;
       if (dt < mindt) mindt = dt;
     }
-    isFirst = 0;
+    else{
+        dt =0.0;
+        isFirst = 0;
+        printf(
+            "time, "
+            "Roll, Pitch, Yaw, "
+            "p, q, r, "
+            "RollCom, PitchCom, YawCom, "
+            "pCom, qCom, rCom, "
+            "Ail, Ele, Rud, Thro, "
+            "FRmot, FLmot, BRmot, BLmot, "
+            "dtsum, freq"
+            "\n"
+        );
+        return;
+    }
 
     //------------- Console and network output with a lowered rate ------------
     dtsumm += dt;
@@ -293,6 +309,8 @@ void imuLoop(AHRS* ahrs, RCInput* rcin, RCOutput* pwm)
         }
 
         // Console output
+
+        
         if(0){
             printf(
                 "ROLL: %+7.2f PITCH: %+7.2f YAW: %+7.2f "
@@ -307,13 +325,15 @@ void imuLoop(AHRS* ahrs, RCInput* rcin, RCOutput* pwm)
         }
         else{
             printf(
-                "%+7.2f, %+7.2f, %+7.2f, "
-                "%+7.2f, %+7.2f, %+7.2f, "
-                "%+7.2f, %+7.2f, %+7.2f, "
-                "%+7.2f, %+7.2f, %+7.2f, "
+                "%.4f, "
+                "%+7.3f, %+7.3f, %+7.3f, "
+                "%+7.3f, %+7.3f, %+7.3f, "
+                "%+7.3f, %+7.3f, %+7.3f, "
+                "%+7.3f, %+7.3f, %+7.3f, "
                 "%04d, %04d ,%04d ,%04d, " 
                 "%04d, %04d ,%04d ,%04d, " 
                 "%.4f, %d\n", 
+                total_time, 
                 phi, theta, psi, 
                 p, q, r,
                 RollCom, PitchCom, YawCom,
@@ -329,6 +349,7 @@ void imuLoop(AHRS* ahrs, RCInput* rcin, RCOutput* pwm)
         //printf("TH %d, X %f, Y %f, Z %f\n",Throttle, RollErr, PitchErr, YawErr);
         //printf("TH %d, X %f, Y %f, Z %f\n",Throttle, phi, theta, psi);
 
+        total_time+=dtsumm;
         dtsumm = 0;
     }
 
