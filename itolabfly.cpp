@@ -112,6 +112,17 @@ void resetErr(void){
         }
     }
 }
+
+float Olddata[3]={0.0};
+
+float filter(int axis, float dt, float data){
+    float y,T,f;
+    f=30.0;//[Hz]
+    T=1/f/2/3.14159;
+    y=(T * Olddata[axis] + dt * data)/(T + dt);
+    Olddata[axis]=data;
+    return y;
+}
 void motor_control(RCOutput* pwm, int rr, int rl, int br, int bl){
     pwm->set_duty_cycle(FRMOTOR, rr);
     pwm->set_duty_cycle(FLMOTOR, rl);
@@ -163,6 +174,10 @@ void imuLoop(AHRS* ahrs, RCInput* rcin, RCOutput* pwm)
     ahrs->getEuler(&theta, &phi, &psi);
     ahrs->getGyro(&q, &p, &r);
     r=-r;
+    
+    float np=filter(AXIS_X, dt, p);
+    float nq=filter(AXIS_Y, dt, q);
+    float nr=filter(AXIS_Z, dt, r);
 
     //-------- Get RCInput
      
@@ -321,7 +336,7 @@ void imuLoop(AHRS* ahrs, RCInput* rcin, RCOutput* pwm)
         }
 
         // Console output
-
+#if 0
         
         if(0){
             printf(
@@ -360,6 +375,8 @@ void imuLoop(AHRS* ahrs, RCInput* rcin, RCOutput* pwm)
         //printf("TH %d, X %f, Y %f, Z %f\n",Throttle, RollCom, PitchCom, YawCom);
         //printf("TH %d, X %f, Y %f, Z %f\n",Throttle, RollErr, PitchErr, YawErr);
         //printf("TH %d, X %f, Y %f, Z %f\n",Throttle, phi, theta, psi);
+#endif
+        printf("%f,%f,%f,%f,%f,%f\n",p,np,q,nq,r,nr);
 
         total_time+=dtsumm;
         dtsumm = 0.0;
