@@ -117,7 +117,7 @@ float Olddata[3]={0.0};
 
 float filter(int axis, float dt, float data){
     float y,T,f;
-    f=30.0;//[Hz]
+    f=5.0;//[Hz]
     T=1/f/2/3.14159;
     y=(T * Olddata[axis] + dt * data)/(T + dt);
     Olddata[axis]=data;
@@ -376,7 +376,7 @@ void imuLoop(AHRS* ahrs, RCInput* rcin, RCOutput* pwm)
         //printf("TH %d, X %f, Y %f, Z %f\n",Throttle, RollErr, PitchErr, YawErr);
         //printf("TH %d, X %f, Y %f, Z %f\n",Throttle, phi, theta, psi);
 #endif
-        printf("%f,%f,%f,%f,%f,%f\n",p,np,q,nq,r,nr);
+        printf("%f,%f,%f,%f,%f,%f,%f\n",total_time,p,np,q,nq,r,nr);
 
         total_time+=dtsumm;
         dtsumm = 0.0;
