@@ -175,9 +175,10 @@ void imuLoop(AHRS* ahrs, RCInput* rcin, RCOutput* pwm)
     ahrs->getGyro(&q, &p, &r);
     r=-r;
     
-    float np=filter(AXIS_X, dt, p);
-    float nq=filter(AXIS_Y, dt, q);
-    float nr=filter(AXIS_Z, dt, r);
+    //filtering
+    p=filter(AXIS_X, dt, p);
+    q=filter(AXIS_Y, dt, q);
+    r=filter(AXIS_Z, dt, r);
 
     //-------- Get RCInput
      
@@ -336,7 +337,7 @@ void imuLoop(AHRS* ahrs, RCInput* rcin, RCOutput* pwm)
         }
 
         // Console output
-#if 0
+#if 1
         
         if(0){
             printf(
@@ -376,7 +377,7 @@ void imuLoop(AHRS* ahrs, RCInput* rcin, RCOutput* pwm)
         //printf("TH %d, X %f, Y %f, Z %f\n",Throttle, RollErr, PitchErr, YawErr);
         //printf("TH %d, X %f, Y %f, Z %f\n",Throttle, phi, theta, psi);
 #endif
-        printf("%f,%f,%f,%f,%f,%f,%f\n",total_time,p,np,q,nq,r,nr);
+        //printf("%f,%f,%f,%f,%f,%f,%f\n",total_time,p,np,q,nq,r,nr);
 
         total_time+=dtsumm;
         dtsumm = 0.0;
