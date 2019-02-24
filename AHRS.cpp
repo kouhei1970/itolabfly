@@ -256,10 +256,11 @@ void AHRS::setGyroOffset()
     //-------------------------------------------------------------------------
 
     printf("Beginning Gyro calibration...\n");
-    sleep(10);
+    sleep(5);
 
+    int Num=500;
 
-    for(int i = 0; i<1000; i++)
+    for(int i = 0; i<Num; i++)
     {
         sensor->update();
         sensor->read_gyroscope(&gx, &gy, &gz);
@@ -274,9 +275,9 @@ void AHRS::setGyroOffset()
 
         usleep(10000);
     }
-    offset[0]/=1000.0;
-    offset[1]/=1000.0;
-    offset[2]/=1000.0;
+    offset[0]/=Num;
+    offset[1]/=Num;
+    offset[2]/=Num;
 
     printf("Offsets are: %f %f %f\n", offset[0], offset[1], offset[2]);
 

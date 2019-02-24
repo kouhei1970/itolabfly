@@ -19,6 +19,7 @@
 #define FLMOTOR 2
 #define BRMOTOR 3
 #define BLMOTOR 1
+#define MOTSTOP 1000
 
 #define PREPARE 0
 #define DISARMED 1
@@ -46,15 +47,15 @@ float Sum[2][3]={0.0};
 float Pid_gain[2][3][3]={
     {//rate contorl
         //Kp, Ki, Kd
-        {0.005, 0.0, 0.00},//Roll
-        {0.005, 0.0, 0.00},//Pitch
-        {0.005, 0.0, 0.0} //Yaw
+        {0.025, 0.0002, 0.04},//Roll
+        {0.025, 0.0002, 0.04},//Pitch
+        {0.02, 0.0001, 0.00} //Yaw
     },
     {//angle control
         //Kp, Ki, Kd
         {2.5, 0.0, 0.0},//Roll
         {2.5, 0.0, 0.0},//Pitch
-        {2.5, 0.0, 0.0} //Yaw
+        {1.5, 0.0, 0.0} //Yaw
         
     }
 };
@@ -80,8 +81,8 @@ float pid(float err, int id, int axis){
 
     derr = err-Olderr[id][axis];
     Sum[id][axis] = Sum[id][axis]+err;
-    if (Sum[id][axis]>50000.0) Sum[id][axis]=50000.0;
-    else if (Sum[id][axis]<-50000.0) Sum[id][axis]=-50000.0;
+    if (Sum[id][axis]>500000.0) Sum[id][axis]=500000.0;
+    else if (Sum[id][axis]<-500000.0) Sum[id][axis]=-500000.0;
     sum = Sum[id][axis];
     Olderr[id][axis] = err;
 
@@ -109,7 +110,12 @@ void resetErr(void){
         }
     }
 }
-
+void motor_control(RCOutput* pwm, int rr, int rl, int br, int bl){
+    pwm->set_duty_cycle(FRMOTOR, rr);
+    pwm->set_duty_cycle(FLMOTOR, rl);
+    pwm->set_duty_cycle(BRMOTOR, br);
+    pwm->set_duty_cycle(BLMOTOR, bl);
+}
 
 
 //============================== Main loop ====================================
@@ -222,11 +228,12 @@ void imuLoop(AHRS* ahrs, RCInput* rcin, RCOutput* pwm)
 
         RollCom = RollCom * 45.0;
         PitchCom = PitchCom * 45.0;
+        YawCom *=45.0;
 
         //float ThrustErr = ThrustCom;
         float RollErr   = RollCom  - phi;
         float PitchErr  = PitchCom - theta;    
-        float YawErr    = 0.0;//YawCom   - psi;
+        float YawErr    = YawCom;
 
         //Angle Control PID (Outer Loop)
         float pCom = pid(RollErr,  ANGLE_CTL, AXIS_X);
@@ -235,7 +242,7 @@ void imuLoop(AHRS* ahrs, RCInput* rcin, RCOutput* pwm)
         
         float pErr = pCom - p;
         float qErr = qCom - q;
-        float rErr = YawCom - r;
+        float rErr = rCom - r;
          
         //Rate Control  PID (Inner Loop)
         float Roll  = pid(pErr, RATE_CTL, AXIS_X);
@@ -251,31 +258,31 @@ void imuLoop(AHRS* ahrs, RCInput* rcin, RCOutput* pwm)
         int BLmot=(int)(Thrust*mixing[0] + Roll*mixing[1] - Pitch*mixing[2] + Yaw*mixing[3]) + 1000;
 
         if (FRmot<1000) FRmot=1000;
-        else if (FRmot>2000) FRmot=2000;
+        else if (FRmot>1900) FRmot=1900;
         if (FLmot<1000) FLmot=1000;
-        else if (FLmot>2000) FLmot=2000;
+        else if (FLmot>1900) FLmot=1900;
         if (BRmot<1000) BRmot=1000;
-        else if (BRmot>2000) BRmot=2000;
+        else if (BRmot>1900) BRmot=1900;
         if (BLmot<1000) BLmot=1000;
-        else if (BLmot>2000) BLmot=2000;
+        else if (BLmot>1900) BLmot=1900;
 
 #if 1
         if ( mode==ARMED ){
 
-            led.setColor(Colors::Red);  
-            pwm->set_duty_cycle(FRMOTOR, FRmot);
-            pwm->set_duty_cycle(FLMOTOR, FLmot);
-            pwm->set_duty_cycle(BRMOTOR, BRmot);
-            pwm->set_duty_cycle(BLMOTOR, BLmot);
-
+            led.setColor(Colors::Red);
+            if(Throttle < ThMin+50){
+                resetSum();
+                resetErr();
+                motor_control(pwm, MOTSTOP, MOTSTOP, MOTSTOP, MOTSTOP);
+            }
+            else{
+                motor_control(pwm, FRmot, FLmot, BRmot, BLmot);
+            }
         }
         if (mode==DISARMED){
 
             led.setColor(Colors::Blue);
-            pwm->set_duty_cycle(FRMOTOR, 1000);
-            pwm->set_duty_cycle(FLMOTOR, 1000);
-            pwm->set_duty_cycle(BRMOTOR, 1000);
-            pwm->set_duty_cycle(BLMOTOR, 1000);
+            motor_control(pwm, MOTSTOP, MOTSTOP, MOTSTOP, MOTSTOP);
             resetSum();
             resetErr();
         }
@@ -283,10 +290,8 @@ void imuLoop(AHRS* ahrs, RCInput* rcin, RCOutput* pwm)
         if (mode==PREPARE){
 
             led.setColor(Colors::Yellow);  
-            pwm->set_duty_cycle(FRMOTOR, 1000);
-            pwm->set_duty_cycle(FLMOTOR, 1000);
-            pwm->set_duty_cycle(BRMOTOR, 1000);
-            pwm->set_duty_cycle(BLMOTOR, 1000);
+            motor_control(pwm, MOTSTOP, MOTSTOP, MOTSTOP, MOTSTOP);
+            resetSum();
             resetSum();
             resetErr();
         }
