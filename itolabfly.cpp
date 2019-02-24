@@ -362,7 +362,7 @@ void imuLoop(AHRS* ahrs, RCInput* rcin, RCOutput* pwm)
         //printf("TH %d, X %f, Y %f, Z %f\n",Throttle, phi, theta, psi);
 
         total_time+=dtsumm;
-        dtsumm = 0;
+        dtsumm = 0.0;
     }
 
 }
