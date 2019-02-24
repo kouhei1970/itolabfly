@@ -46,15 +46,15 @@ float Sum[2][3]={0.0};
 float Pid_gain[2][3][3]={
     {//rate contorl
         //Kp, Ki, Kd
-        {0.01, 0.0, 0.01},//Roll
-        {0.01, 0.0, 0.01},//Pitch
-        {0.01, 0.0, 0.0} //Yaw
+        {0.005, 0.0, 0.00},//Roll
+        {0.005, 0.0, 0.00},//Pitch
+        {0.005, 0.0, 0.0} //Yaw
     },
     {//angle control
         //Kp, Ki, Kd
-        {0.01, 0.0, 0.0},//Roll
-        {0.01, 0.0, 0.0},//Pitch
-        {0.01, 0.0, 0.0} //Yaw
+        {2.5, 0.0, 0.0},//Roll
+        {2.5, 0.0, 0.0},//Pitch
+        {2.5, 0.0, 0.0} //Yaw
         
     }
 };
@@ -85,12 +85,32 @@ float pid(float err, int id, int axis){
     sum = Sum[id][axis];
     Olderr[id][axis] = err;
 
+    u = 0.0;
     u += Pid_gain[id][axis][KP] * err;  //P
     u += Pid_gain[id][axis][KI] * sum;  //I
     u += Pid_gain[id][axis][KD] * derr; //D  
 
     return u ;
 }
+
+void resetSum(void){
+
+    for (int i=0; i<2; i++){
+        for (int j=0; j<3; j++) {
+            Sum[i][j]=0.0;
+        }
+    }
+}
+
+void resetErr(void){
+    for (int i=0; i<2; i++){
+        for (int j=0; j<3; j++) {
+            Olderr[i][j]=0.0;
+        }
+    }
+}
+
+
 
 //============================== Main loop ====================================
 
@@ -192,19 +212,19 @@ void imuLoop(AHRS* ahrs, RCInput* rcin, RCOutput* pwm)
         float PitchErr  = PitchCom - theta;    
         float YawErr    = 0.0;//YawCom   - psi;
 
-        //Rate Control PID (Outer Loop)
-        float pCom = pid(RollErr,  RATE_CTL, AXIS_X);
-        float qCom = pid(PitchErr, RATE_CTL, AXIS_Y);
-        float rCom = pid(YawErr,   RATE_CTL, AXIS_Z);
+        //Angle Control PID (Outer Loop)
+        float pCom = pid(RollErr,  ANGLE_CTL, AXIS_X);
+        float qCom = pid(PitchErr, ANGLE_CTL, AXIS_Y);
+        float rCom = pid(YawErr,   ANGLE_CTL, AXIS_Z);
         
         float pErr = pCom - p;
         float qErr = qCom - q;
         float rErr = YawCom - r;
          
-        //Angle Control  PID (Inner Loop)
-        float Roll  = pid(pErr, ANGLE_CTL, AXIS_X);
-        float Pitch = pid(qErr, ANGLE_CTL, AXIS_Y);
-        float Yaw   = pid(rErr, ANGLE_CTL, AXIS_Z);
+        //Rate Control  PID (Inner Loop)
+        float Roll  = pid(pErr, RATE_CTL, AXIS_X);
+        float Pitch = pid(qErr, RATE_CTL, AXIS_Y);
+        float Yaw   = pid(rErr, RATE_CTL, AXIS_Z);
 
         Thrust = ThrustCom;
 
@@ -240,6 +260,8 @@ void imuLoop(AHRS* ahrs, RCInput* rcin, RCOutput* pwm)
             pwm->set_duty_cycle(FLMOTOR, 1000);
             pwm->set_duty_cycle(BRMOTOR, 1000);
             pwm->set_duty_cycle(BLMOTOR, 1000);
+            resetSum();
+            resetErr();
         }
         
         if (mode==PREPARE){
@@ -249,6 +271,8 @@ void imuLoop(AHRS* ahrs, RCInput* rcin, RCOutput* pwm)
             pwm->set_duty_cycle(FLMOTOR, 1000);
             pwm->set_duty_cycle(BRMOTOR, 1000);
             pwm->set_duty_cycle(BLMOTOR, 1000);
+            resetSum();
+            resetErr();
         }
 #endif        
         //Mode Change
@@ -285,11 +309,15 @@ void imuLoop(AHRS* ahrs, RCInput* rcin, RCOutput* pwm)
             printf(
                 "%+7.2f, %+7.2f, %+7.2f, "
                 "%+7.2f, %+7.2f, %+7.2f, "
+                "%+7.2f, %+7.2f, %+7.2f, "
+                "%+7.2f, %+7.2f, %+7.2f, "
                 "%04d, %04d ,%04d ,%04d, " 
                 "%04d, %04d ,%04d ,%04d, " 
                 "%.4f, %d\n", 
                 phi, theta, psi, 
-                p, q, r, 
+                p, q, r,
+                RollCom, PitchCom, YawCom,
+                pCom, qCom, rCom, 
                 Aileron, Elevator, Rudder, Throttle,
                 FRmot, FLmot, BRmot, BLmot,
                 dtsumm, int(1/dtsumm)
