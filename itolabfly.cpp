@@ -49,8 +49,8 @@ float Sum[2][3]={0.0};
 float Pid_gain[2][3][3]={
     {//rate contorl
         //Kp, Ki, Kd
-        {0.025, 0.0002, 0.1},//Roll
-        {0.025, 0.0002, 0.1},//Pitch
+        {0.025, 0.0002, 0.2},//Roll
+        {0.025, 0.0002, 0.2},//Pitch
         {0.02, 0.0001, 0.00} //Yaw
     },
     {//angle control
